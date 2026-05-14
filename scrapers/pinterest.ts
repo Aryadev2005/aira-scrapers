@@ -9,6 +9,45 @@ import type { PinterestSession } from "../core/session";
 
 const CFG = SCRAPE_CONFIG.pinterest;
 
+// ── Pin enrichment via PinResource API ───────────────────────────────────────
+
+async function enrichPinsWithSaves(
+  page: any,
+  pins: PinterestPin[]
+): Promise<void> {
+  console.log(chalk.gray(`  enriching ${pins.length} pins with save counts...`));
+  for (const pin of pins) {
+    try {
+      const pinId = pin.pin_id;
+      const saves = await page.evaluate(async (id: string) => {
+        const url = `https://www.pinterest.com/resource/PinResource/get/?source_url=/pin/${id}/&data=${encodeURIComponent(JSON.stringify({
+          options: { id, field_set_key: "detailed" },
+          context: {}
+        }))}&_=${Date.now()}`;
+        const res = await fetch(url, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*, q=0.01",
+          },
+          credentials: "include",
+        });
+        const json: any = await res.json();
+        return Number(
+          json?.resource_response?.data?.aggregated_pin_data?.aggregated_stats?.saves || 0
+        );
+      }, pinId);
+
+      if (saves > 0) {
+        pin.saves = saves;
+        console.log(chalk.gray(`    pin ${pinId} → ${saves} saves`));
+      }
+    } catch {
+      // skip
+    }
+    await new Promise(r => setTimeout(r, 300));
+  }
+}
+
 // ── Core scrape via Playwright ────────────────────────────────────────────────
 
 async function scrapeWithPlaywright(
@@ -45,59 +84,70 @@ async function scrapeWithPlaywright(
 
   // Intercept API responses that contain pin data
   page.on("response", async (response) => {
-    const respUrl = response.url();
-    if (
-      respUrl.includes("pinterest.com/resource/") &&
-      respUrl.includes("get/") &&
-      pins.length < maxPins
-    ) {
-      try {
-        const json = await response.json();
-        const resourceResponse = json?.resource_response;
-        if (!resourceResponse) return;
+  const respUrl = response.url();
+  if (
+    respUrl.includes("pinterest.com/resource/") &&
+    respUrl.includes("get/") &&
+    pins.length < maxPins
+  ) {
+    try {
+      const json = await response.json();
+      const resourceResponse = json?.resource_response;
+      if (!resourceResponse) return;
 
-        // Search results shape
-        const results =
-          resourceResponse?.data?.results ||
-          resourceResponse?.data ||
-          [];
+      const results =
+        resourceResponse?.data?.results ||
+        resourceResponse?.data ||
+        [];
 
-        const items = Array.isArray(results) ? results : [];
-        for (const item of items) {
-          if (pins.length >= maxPins) break;
-          const pin = normalizePin(item);
-          if (pin && !seenIds.has(pin.pin_id)) {
-            seenIds.add(pin.pin_id);
-            pins.push(pin);
-          }
+      const items = Array.isArray(results) ? results : [];
+      for (const item of items) {
+        if (pins.length >= maxPins) break;
+
+        // Skip UI junk
+        const type = (item as any).type;
+        if (type === "filter" || type === "story" || type === "search") continue;
+
+        // Must have an actual pin id
+        const id = String((item as any).id || (item as any).pin_id || "");
+        if (!id || seenIds.has(id)) continue;
+
+        const pin = normalizePin(item as Record<string, unknown>);
+        if (pin) {
+          seenIds.add(id);
+          pins.push(pin);
         }
-        console.log(chalk.gray(`  intercepted ${items.length} items → ${pins.length} total`));
-      } catch {
-        // not JSON or not pin data — skip
       }
+      if (items.length > 0) {
+        console.log(chalk.gray(`  intercepted ${items.length} items → ${pins.length} total`));
+      }
+    } catch {
+      // not JSON — skip
     }
-  });
+  }
+});
 
   try {
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
-    await page.waitForTimeout(3000);
+  await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+  await page.waitForTimeout(3000);
 
-    // Scroll to trigger more pin loads
-    let scrolls = 0;
-    while (pins.length < maxPins && scrolls < 10) {
-      await page.evaluate(() => window.scrollBy(0, 2000));
-      await page.waitForTimeout(1500);
-      scrolls++;
-      console.log(chalk.gray(`  scroll ${scrolls} → ${pins.length} pins so far`));
-    }
-  } catch (err) {
-    console.log(chalk.yellow(`  ⚠ Page load issue: ${(err as Error).message}`));
+  // Scroll to trigger more pin loads
+  let scrolls = 0;
+  while (pins.length < maxPins && scrolls < 10) {
+    await page.mouse.wheel(0, 2000);
+    await page.waitForTimeout(1500);
+    scrolls++;
+    console.log(chalk.gray(`  scroll ${scrolls} → ${pins.length} pins so far`));
   }
 
-  await browser.close();
-  return pins;
+  await enrichPinsWithSaves(page, pins);
+
+} catch (err) {
+  console.log(chalk.yellow(`  ⚠ Page load issue: ${(err as Error).message}`));
 }
 
+await browser.close();
+return pins;}
 // ── Search ────────────────────────────────────────────────────────────────────
 
 export async function scrapeSearch(
