@@ -9,13 +9,69 @@ import type { PinterestSession } from "../core/session";
 
 const CFG = SCRAPE_CONFIG.pinterest;
 
+// ── Pin enrichment via PinResource API ───────────────────────────────────────
+
+async function enrichPinsWithSaves(
+  page: any,
+  pins: PinterestPin[],
+  cookieString: string,
+  csrfToken: string
+): Promise<void> {
+  console.log(chalk.gray(`  enriching ${pins.length} pins with save counts...`));
+
+  for (const pin of pins) {
+    try {
+      const response = await page.request.get(
+        `https://www.pinterest.com/resource/PinResource/get/?source_url=/pin/${pin.pin_id}/&data=${encodeURIComponent(JSON.stringify({
+          options: { id: pin.pin_id, field_set_key: "detailed" },
+          context: {}
+        }))}&_=${Date.now()}`,
+        {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*, q=0.01",
+            "X-APP-VERSION": "a514f54",
+            "X-CSRFToken": csrfToken,
+            "Cookie": cookieString,
+            "Referer": `https://www.pinterest.com/pin/${pin.pin_id}/`,
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          },
+        }
+      );
+
+      if (response.ok()) {
+        const json = await response.json();
+        if (pins.indexOf(pin) === 0) {
+          const data = json?.resource_response?.data;
+          console.log(chalk.gray(`  🔍 first pin raw keys: ${Object.keys(data || {}).join(", ")}`));
+          console.log(chalk.gray(`  🔍 repin_count=${data?.repin_count} saves=${data?.aggregated_pin_data?.aggregated_stats?.saves}`));
+        }
+
+        const saves = Number(
+          json?.resource_response?.data?.repin_count ||
+          json?.resource_response?.data?.aggregated_pin_data?.aggregated_stats?.saves ||
+          0
+        );
+        if (saves > 0) {
+          pin.saves = saves;
+          console.log(chalk.gray(`    pin ${pin.pin_id} → ${saves} saves`));
+        }
+      }
+    } catch (err) {
+      console.log(chalk.yellow(`    pin ${pin.pin_id} error: ${(err as Error).message}`));
+    }
+    await new Promise(r => setTimeout(r, 400));
+  }
+}
+
 // ── Core scrape via Playwright ────────────────────────────────────────────────
 
 async function scrapeWithPlaywright(
   url: string,
   query: string,
   maxPins: number,
-  cookieString: string
+  cookieString: string,
+  csrfToken: string
 ): Promise<PinterestPin[]> {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -63,6 +119,21 @@ async function scrapeWithPlaywright(
         [];
 
       const items = Array.isArray(results) ? results : [];
+      // TEMP DEBUG — log raw fields from first batch containing a real pin
+      if (items.length > 0 && pins.length === 0) {
+        const sample = items.find((i: any) => i?.id || i?.pin_id);
+        if (sample) {
+          console.log("🔍 RAW SAMPLE FIELDS:", JSON.stringify({
+            id: sample.id,
+            repin_count: sample.repin_count,
+            save_count: sample.save_count,
+            saves: sample.saves,
+            aggregated_pin_data: sample.aggregated_pin_data,
+            type: sample.type,
+            _all_keys: Object.keys(sample),
+          }, null, 2));
+        }
+      }
       for (const item of items) {
         if (pins.length >= maxPins) break;
 
@@ -112,6 +183,8 @@ async function scrapeWithPlaywright(
     console.log(chalk.gray(`  scroll ${scrolls} → ${pins.length} pins so far`));
   }
 
+  await enrichPinsWithSaves(page, pins, cookieString, csrfToken);
+
 } catch (err) {
   console.log(chalk.yellow(`  ⚠ Page load issue: ${(err as Error).message}`));
 }
@@ -127,7 +200,7 @@ export async function scrapeSearch(
 ): Promise<PinterestPin[]> {
   console.log(chalk.cyan(`\n🔍 "${query}"`));
   const url = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}&rs=typed`;
-  const pins = await scrapeWithPlaywright(url, query, maxPins, session.cookieString());
+  const pins = await scrapeWithPlaywright(url, query, maxPins, session.cookieString(), session.csrfToken);
   console.log(chalk.green(`  ✓ ${pins.length} pins`));
   return pins;
 }
@@ -140,7 +213,7 @@ export async function scrapeTrending(
 ): Promise<PinterestPin[]> {
   console.log(chalk.cyan(`\n🔥 Trending feed`));
   const url = "https://www.pinterest.com/";
-  const pins = await scrapeWithPlaywright(url, "trending", maxPins, session.cookieString());
+  const pins = await scrapeWithPlaywright(url, "trending", maxPins, session.cookieString(), session.csrfToken);
   console.log(chalk.green(`  ✓ ${pins.length} trending pins`));
   return pins;
 }
@@ -154,7 +227,7 @@ export async function scrapeBoard(
 ): Promise<PinterestPin[]> {
   console.log(chalk.cyan(`\n📌 Board: "${boardUrl}"`));
   const url = `https://www.pinterest.com/${boardUrl}/`;
-  const pins = await scrapeWithPlaywright(url, boardUrl, maxPins, session.cookieString());
+  const pins = await scrapeWithPlaywright(url, boardUrl, maxPins, session.cookieString(), session.csrfToken);
   console.log(chalk.green(`  ✓ ${pins.length} pins`));
   return pins;
 }
