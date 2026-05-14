@@ -32,7 +32,8 @@ export function buildApiHeaders(
   userAgent:    string,
   csrfToken:    string,
   cookieString: string,
-  referer:      string
+  referer:      string,
+  appVersion:   string,
 ): Record<string, string> {
   return {
     "User-Agent":            userAgent,
@@ -40,7 +41,7 @@ export function buildApiHeaders(
     "Accept-Language":       "en-IN,en-GB;q=0.9,en-US;q=0.8",
     "Accept-Encoding":       "gzip, deflate, br",
     "X-Requested-With":      "XMLHttpRequest",
-    "X-APP-VERSION":         "a17b1e8",
+    "X-APP-VERSION":         appVersion,
     "X-Pinterest-AppState":  "active",
     "X-CSRFToken":           csrfToken,
     Referer:                 referer,

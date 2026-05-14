@@ -2,7 +2,7 @@
 
 import chalk from "chalk";
 import { buildApiHeaders } from "../core/http";
-import { normalizePin } from "../normalizers/pintrest";
+import { normalizePin } from "../normalizers/pinterest";
 import { sleep, randomUA } from "../utils/helpers";
 import { SCRAPE_CONFIG } from "../config/index";
 import type { PinterestSession } from "../core/session";
@@ -23,7 +23,8 @@ async function callAPI(
         session.userAgent,
         session.csrfToken,
         session.cookieString(),
-        url
+        url,
+        session.appVersion
       ),
     });
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);

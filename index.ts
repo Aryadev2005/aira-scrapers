@@ -8,7 +8,7 @@ import {
   upsertPinterestPins, getPinterestTableStats,
 } from "./core/db";
 import { PinterestSession }                          from "./core/session";
-import { scrapeSearch, scrapeTrending, scrapeBoard } from "./scrapers/pintrest";
+import { scrapeSearch, scrapeTrending, scrapeBoard } from "./scrapers/pinterest";
 import { PINTEREST_QUERIES, SCRAPE_CONFIG }          from "./config/index";
 import { sleep }                                     from "./utils/helpers";
 import type { PinterestPin, ScraperSource }          from "./types/index";

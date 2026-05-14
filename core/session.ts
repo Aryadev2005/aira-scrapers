@@ -12,6 +12,7 @@ const CFG = SCRAPE_CONFIG.pinterest;
 export class PinterestSession {
   cookies:   Record<string, string> = {};
   csrfToken: string                 = "";
+  appVersion: string                 = "a17b1e8";
   userAgent: string                 = randomUA();
   http!:     AxiosInstance;
 
@@ -46,6 +47,7 @@ export class PinterestSession {
     const data: SessionCache = {
       cookies:   this.cookies,
       csrfToken: this.csrfToken,
+      appVersion: this.appVersion,
       userAgent: this.userAgent,
       savedAt:   Date.now(),
     };
@@ -68,6 +70,7 @@ export class PinterestSession {
       this.cookies   = data.cookies;
       this.csrfToken = data.csrfToken;
       this.userAgent = data.userAgent;
+      this.appVersion = data.appVersion || "a17b1e8";
       console.log(chalk.green(`✓ Cached session loaded (${ageDays.toFixed(1)}d old) — skipping login`));
       return true;
     } catch {
@@ -122,7 +125,11 @@ export class PinterestSession {
       this.cookies["csrftoken"] ||
       (homeRes.data as string)?.match(/"csrftoken"\s*:\s*"([^"]+)"/)?.[1] ||
       "";
-
+    const appVersionMatch = (homeRes.data as string)?.match(
+  /"app_version"\s*:\s*"([^"]+)"|"APP_VERSION"\s*:\s*"([^"]+)"|\/\/web\/([a-f0-9]{7,})\//
+);
+this.appVersion = appVersionMatch?.[1] || appVersionMatch?.[2] || appVersionMatch?.[3] || "a17b1e8";
+console.log(chalk.gray(`  App version: ${this.appVersion}`));
     if (!this.csrfToken) throw new Error("Could not extract csrftoken from homepage");
 
     // Step 2 — login

@@ -41,6 +41,7 @@ export interface SessionCache {
   cookies:   Record<string, string>;
   csrfToken: string;
   userAgent: string;
+  appVersion: string;
   savedAt:   number;
 }
 

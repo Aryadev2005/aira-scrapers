@@ -51,7 +51,7 @@ export const SCRAPE_CONFIG = {
     delayBetweenQueries:  3500,
     maxRetries:           3,
     retryDelay:           5000,
-    sessionFile:          "./pintrest.session.json",
+    sessionFile:          "./pinterest.session.json",
     sessionMaxAgeDays:    13,
   } satisfies PinterestConfig,
 
@@ -80,7 +80,7 @@ export const SCRAPE_CONFIG = {
 // ── Global proxy ──────────────────────────────────────────────────────────────
 
 export const PROXY_URL: string | null =
-  process.env.SCRAPER_PROXY || process.env.PINTREST_PROXY || null;
+  process.env.SCRAPER_PROXY || process.env.PINTEREST_PROXY || null;
 
 // ── Query lists ───────────────────────────────────────────────────────────────
 
