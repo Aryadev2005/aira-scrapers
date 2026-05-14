@@ -9,52 +9,6 @@ import type { PinterestSession } from "../core/session";
 
 const CFG = SCRAPE_CONFIG.pinterest;
 
-// ── Pin enrichment via PinResource API ───────────────────────────────────────
-
-async function enrichPinsWithSaves(
-  page: any,
-  pins: PinterestPin[]
-): Promise<void> {
-  console.log(chalk.gray(`  enriching ${pins.length} pins with save counts...`));
-  for (const pin of pins) {
-    try {
-      const pinId = pin.pin_id;
-      const saves = await page.evaluate((id: string) => {
-        return new Promise<number>((resolve) => {
-          const url = `https://www.pinterest.com/resource/PinResource/get/?source_url=/pin/${id}/&data=${encodeURIComponent(JSON.stringify({
-            options: { id, field_set_key: "detailed" },
-            context: {}
-          }))}&_=${Date.now()}`;
-          const xhr = new XMLHttpRequest();
-          xhr.open("GET", url);
-          xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-          xhr.setRequestHeader("Accept", "application/json, text/javascript, */*, q=0.01");
-          xhr.withCredentials = true;
-          xhr.onload = () => {
-            try {
-              const json = JSON.parse(xhr.responseText);
-              console.log("PIN_DETAIL_RAW:", JSON.stringify(json?.resource_response?.data?.aggregated_pin_data || json?.resource_response?.error || "empty", null, 2).slice(0, 300));
-              resolve(Number(
-                json?.resource_response?.data?.aggregated_pin_data?.aggregated_stats?.saves || 0
-              ));
-            } catch { resolve(0); }
-          };
-          xhr.onerror = () => resolve(0);
-          xhr.send();
-        });
-      }, pinId);
-
-      if (saves > 0) {
-        pin.saves = saves;
-        console.log(chalk.gray(`    pin ${pinId} → ${saves} saves`));
-      }
-    } catch (err) {
-      console.log(chalk.yellow(`    pin ${pin.pin_id} evaluate error: ${(err as Error).message}`));
-    }
-    await new Promise(r => setTimeout(r, 300));
-  }
-}
-
 // ── Core scrape via Playwright ────────────────────────────────────────────────
 
 async function scrapeWithPlaywright(
@@ -86,15 +40,9 @@ async function scrapeWithPlaywright(
 
   const pins: PinterestPin[] = [];
   const seenIds = new Set<string>();
+  const savesCache = new Map<string, number>();
 
   const page = await context.newPage();
-
-  // TEMP: forward browser console PIN_DETAIL logs to terminal
-  page.on("console", (msg: any) => {
-    if (msg.text().startsWith("PIN_DETAIL")) {
-      console.log("BROWSER:", msg.text().slice(0, 300));
-    }
-  });
 
   // Intercept API responses that contain pin data
   page.on("response", async (response) => {
@@ -126,8 +74,18 @@ async function scrapeWithPlaywright(
         const id = String((item as any).id || (item as any).pin_id || "");
         if (!id || seenIds.has(id)) continue;
 
+        // repin_count is Pinterest's saves field in feed responses
+        const saves = Number(
+          (item as any).repin_count ||
+          (item as any).aggregated_pin_data?.aggregated_stats?.saves ||
+          (item as any).save_count ||
+          0
+        );
+        if (saves > 0) savesCache.set(id, saves);
+
         const pin = normalizePin(item as Record<string, unknown>);
         if (pin) {
+          pin.saves = savesCache.get(id) || 0;
           seenIds.add(id);
           pins.push(pin);
         }
@@ -153,8 +111,6 @@ async function scrapeWithPlaywright(
     scrolls++;
     console.log(chalk.gray(`  scroll ${scrolls} → ${pins.length} pins so far`));
   }
-
-  await enrichPinsWithSaves(page, pins);
 
 } catch (err) {
   console.log(chalk.yellow(`  ⚠ Page load issue: ${(err as Error).message}`));
