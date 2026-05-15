@@ -153,6 +153,24 @@ async function main(): Promise<void> {
   console.log(`  Save   : ${chalk.white(SAVE_DB ? "Supabase DB + JSON" : "JSON only")}`);
   console.log(`  Board  : ${chalk.white(BOARD_ARG ?? "—")}\n`);
 
+  if (SOURCE === "reddit") {
+    connectDB();
+    const conn = await testConnection();
+    console.log(chalk.green(`  ✓ DB: ${conn.db} @ ${conn.time}`));
+
+    const posts = await runReddit();
+    printRedditStats(posts);
+
+    if (!SAVE_DB) {
+      const outFile = `reddit_output_${Date.now()}.json`;
+      writeFileSync(outFile, JSON.stringify(posts, null, 2));
+      console.log(chalk.gray(`  Saved to ${outFile}`));
+    }
+
+    await disconnectDB();
+    return;
+  }
+
   if (SAVE_DB) {
     console.log(chalk.blue("▶ Connecting to Supabase..."));
     connectDB();
@@ -205,21 +223,3 @@ main().catch((err: unknown) => {
   console.error(chalk.red(`\n✗ Fatal: ${(err as Error).message}`));
   process.exit(1);
 });
-// Inside main(), after the existing Pinterest block:
-
-if (SOURCE === "reddit") {
-  await connectDB();
-  const conn = await testConnection();
-  console.log(chalk.green(`  ✓ DB: ${conn.db} @ ${conn.time}`));
-
-  const posts = await runReddit();
-  printRedditStats(posts);
-
-  if (!SAVE_DB) {
-    const outFile = `reddit_output_${Date.now()}.json`;
-    writeFileSync(outFile, JSON.stringify(posts, null, 2));
-    console.log(chalk.gray(`  📁 Saved to ${outFile}`));
-  }
-
-  await disconnectDB();
-}
