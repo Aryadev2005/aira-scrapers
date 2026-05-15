@@ -12,55 +12,81 @@ const CFG = SCRAPE_CONFIG.pinterest;
 // ── Pin enrichment via PinResource API ───────────────────────────────────────
 
 async function enrichPinsWithSaves(
-  page: any,
-  pins: PinterestPin[],
-  cookieString: string,
-  csrfToken: string
+  context: any,         // BrowserContext, not page
+  pins: PinterestPin[]
 ): Promise<void> {
   console.log(chalk.gray(`  enriching ${pins.length} pins with save counts...`));
 
   for (const pin of pins) {
+    const pinPage = await context.newPage();
+    let resolved = false;
+
     try {
-      const response = await page.request.get(
-        `https://www.pinterest.com/resource/PinResource/get/?source_url=/pin/${pin.pin_id}/&data=${encodeURIComponent(JSON.stringify({
-          options: { id: pin.pin_id, field_set_key: "detailed" },
-          context: {}
-        }))}&_=${Date.now()}`,
-        {
-          headers: {
-            "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json, text/javascript, */*, q=0.01",
-            "X-APP-VERSION": "a514f54",
-            "X-CSRFToken": csrfToken,
-            "Cookie": cookieString,
-            "Referer": `https://www.pinterest.com/pin/${pin.pin_id}/`,
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          },
-        }
-      );
+      // Set up response listener BEFORE navigating
+      const savePromise = new Promise<number>((resolve) => {
+        pinPage.on("response", async (response: any) => {
+          const url = response.url();
+          // Pinterest fires CloseupResource or PinResource when a pin page loads
+          if (
+            url.includes("resource/PinResource/get") ||
+            url.includes("resource/CloseupResource/get") ||
+            url.includes(`/v3/pins/${pin.pin_id}`)
+          ) {
+            try {
+              const json = await response.json();
+              const data = json?.resource_response?.data;
 
-      if (response.ok()) {
-        const json = await response.json();
-        if (pins.indexOf(pin) === 0) {
-          const data = json?.resource_response?.data;
-          console.log(chalk.gray(`  🔍 first pin raw keys: ${Object.keys(data || {}).join(", ")}`));
-          console.log(chalk.gray(`  🔍 repin_count=${data?.repin_count} saves=${data?.aggregated_pin_data?.aggregated_stats?.saves}`));
-        }
+              // Log fields on first pin
+              if (pins.indexOf(pin) === 0) {
+                console.log(chalk.yellow(`  🔍 pin page keys: ${Object.keys(data || {}).join(", ")}`));
+                console.log(chalk.yellow(`  🔍 repin_count=${data?.repin_count}, agg_saves=${data?.aggregated_pin_data?.aggregated_stats?.saves}`));
+              }
 
-        const saves = Number(
-          json?.resource_response?.data?.repin_count ||
-          json?.resource_response?.data?.aggregated_pin_data?.aggregated_stats?.saves ||
-          0
-        );
-        if (saves > 0) {
-          pin.saves = saves;
-          console.log(chalk.gray(`    pin ${pin.pin_id} → ${saves} saves`));
-        }
+              const saves = Number(
+                data?.repin_count ||
+                data?.aggregated_pin_data?.aggregated_stats?.saves ||
+                0
+              );
+              if (!resolved) {
+                resolved = true;
+                resolve(saves);
+              }
+            } catch {
+              // not the response we want
+            }
+          }
+        });
+
+        // Timeout fallback — resolve 0 after 8s
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            resolve(0);
+          }
+        }, 8000);
+      });
+
+      // Navigate to the actual pin page
+      await pinPage.goto(`https://www.pinterest.com/pin/${pin.pin_id}/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 10000,
+      });
+
+      const saves = await savePromise;
+      if (saves > 0) {
+        pin.saves = saves;
+        console.log(chalk.green(`    pin ${pin.pin_id} → ${saves} saves`));
+      } else {
+        console.log(chalk.gray(`    pin ${pin.pin_id} → 0 saves`));
       }
+
     } catch (err) {
       console.log(chalk.yellow(`    pin ${pin.pin_id} error: ${(err as Error).message}`));
+    } finally {
+      await pinPage.close();
     }
-    await new Promise(r => setTimeout(r, 400));
+
+    await new Promise(r => setTimeout(r, 600)); // 600ms between pins
   }
 }
 
@@ -183,7 +209,7 @@ async function scrapeWithPlaywright(
     console.log(chalk.gray(`  scroll ${scrolls} → ${pins.length} pins so far`));
   }
 
-  await enrichPinsWithSaves(page, pins, cookieString, csrfToken);
+  await enrichPinsWithSaves(context, pins);
 
 } catch (err) {
   console.log(chalk.yellow(`  ⚠ Page load issue: ${(err as Error).message}`));
