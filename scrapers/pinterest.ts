@@ -63,13 +63,13 @@ async function enrichPinsWithSaves(
             resolved = true;
             resolve(0);
           }
-        }, 8000);
+        }, 12000);
       });
 
       // Navigate to the actual pin page
       await pinPage.goto(`https://www.pinterest.com/pin/${pin.pin_id}/`, {
         waitUntil: "domcontentloaded",
-        timeout: 10000,
+        timeout: 12000,
       });
 
       const saves = await savePromise;
@@ -165,12 +165,12 @@ async function scrapeWithPlaywright(
 
         // Skip UI junk
         const type = (item as any).type;
-        if (type === "filter" || type === "story" || type === "search") continue;
+        if (type === "filter" || type === "story" || type === "search" || type === "conversation") continue;
 
         // Must have an actual pin id
         const id = String((item as any).id || (item as any).pin_id || "");
         if (!id || seenIds.has(id)) continue;
-
+        if (!/^\d+$/.test(id)) continue;
         // repin_count is Pinterest's saves field in feed responses
         const saves = Number(
           (item as any).repin_count ||
