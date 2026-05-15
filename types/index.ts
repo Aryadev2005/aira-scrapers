@@ -46,3 +46,49 @@ export interface SessionCache {
 }
 
 export type ScraperSource = "pinterest" | "reddit" | "tiktok" | "googleTrends";
+// ── Reddit ────────────────────────────────────────────────────────────────────
+
+export interface RedditPost {
+  post_id:      string;
+  subreddit:    string;
+  niche:        string;
+  tier:         string;
+  title:        string;
+  score:        number;
+  upvote_ratio: number;
+  num_comments: number;
+  url:          string;
+  author:       string;
+  flair:        string;
+  age_hours:    number;
+  velocity:     number;
+  is_breakout:  boolean;
+  feed:         string;
+  expires_at:   Date;
+  raw_data:     object;
+}
+
+export interface RedditResult {
+  inserted:         number;
+  updated:          number;
+  errors:           number;
+  subredditsOk:     number;
+  subredditsFailed: number;
+  skippedCache:     number;
+  durationMs:       number;
+}
+
+export interface RedditTableStats {
+  total_posts:       string;
+  posts_with_score:  string;
+  scraped_last_24h:  string;
+  active_posts:      string;
+  last_scraped:      Date;
+  avg_velocity:      string;
+}
+
+export interface SubredditEntry {
+  name:  string;
+  tier:  "A" | "B" | "C";
+  niche: string;
+}

@@ -3,7 +3,7 @@
 import pg from "pg";
 import chalk from "chalk";
 import { DB_CONFIG } from "../config/index";
-import type { PinterestPin, UpsertResult, DBTableStats } from "../types/index";
+import type { PinterestPin, UpsertResult, DBTableStats, RedditPost, RedditTableStats } from "../types/index";
 
 const { Pool } = pg;
 let pool: pg.Pool | null = null;
@@ -111,4 +111,75 @@ export async function getPinterestTableStats(): Promise<DBTableStats> {
     FROM discovery_pinterest_raw
   `);
   return res.rows[0] as DBTableStats;
+}
+
+// ── Reddit upsert ─────────────────────────────────────────────────────────────
+
+export async function upsertRedditPosts(posts: RedditPost[]): Promise<UpsertResult> {
+  if (!pool) throw new Error("DB not connected");
+  if (!posts.length) return { inserted: 0, updated: 0, errors: 0 };
+
+  const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days
+  let inserted = 0, updated = 0, errors = 0;
+
+  for (const post of posts) {
+    try {
+      const res = await pool.query(
+        `INSERT INTO discovery_reddit_raw (
+          post_id, subreddit, title, score, upvote_ratio, num_comments,
+          url, author, flair, age_hours, velocity, is_breakout,
+          feed, expires_at, raw_data
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        ON CONFLICT (post_id) DO UPDATE SET
+          score        = EXCLUDED.score,
+          num_comments = EXCLUDED.num_comments,
+          upvote_ratio = EXCLUDED.upvote_ratio,
+          age_hours    = EXCLUDED.age_hours,
+          velocity     = EXCLUDED.velocity,
+          is_breakout  = EXCLUDED.is_breakout,
+          scraped_at   = NOW()
+        RETURNING (xmax = 0) AS is_insert`,
+        [
+          post.post_id,
+          post.subreddit,
+          post.title,
+          post.score,
+          post.upvote_ratio,
+          post.num_comments,
+          post.url,
+          post.author,
+          post.flair,
+          post.age_hours,
+          post.velocity,
+          post.is_breakout,
+          post.feed,
+          expiresAt.toISOString(),
+          JSON.stringify(post.raw_data),
+        ]
+      );
+
+      if ((res.rows[0] as { is_insert: boolean })?.is_insert) inserted++;
+      else updated++;
+    } catch (err) {
+      console.error(chalk.red(`  ✗ DB upsert failed post ${post.post_id}: ${(err as Error).message}`));
+      errors++;
+    }
+  }
+
+  return { inserted, updated, errors };
+}
+
+export async function getRedditTableStats(): Promise<RedditTableStats> {
+  if (!pool) throw new Error("DB not connected");
+  const res = await pool.query(`
+    SELECT
+      COUNT(*)                                                      AS total_posts,
+      COUNT(*) FILTER (WHERE score > 0)                            AS posts_with_score,
+      COUNT(*) FILTER (WHERE scraped_at > NOW() - INTERVAL '24h') AS scraped_last_24h,
+      COUNT(*) FILTER (WHERE expires_at > NOW())                   AS active_posts,
+      MAX(scraped_at)                                              AS last_scraped,
+      ROUND(AVG(velocity::numeric), 1)                             AS avg_velocity
+    FROM discovery_reddit_raw
+  `);
+  return res.rows[0] as RedditTableStats;
 }

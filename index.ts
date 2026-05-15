@@ -6,12 +6,14 @@ import chalk from "chalk";
 import {
   connectDB, testConnection, disconnectDB,
   upsertPinterestPins, getPinterestTableStats,
+  upsertRedditPosts, getRedditTableStats,        
 } from "./core/db";
 import { PinterestSession }                          from "./core/session";
+import { scrapeReddit }          from "./scrapers/reddit"; 
 import { scrapeSearch, scrapeTrending, scrapeBoard } from "./scrapers/pinterest";
-import { PINTEREST_QUERIES, SCRAPE_CONFIG }          from "./config/index";
+import { REDDIT_SUBREDDITS, getSubredditsByTier, SCRAPE_CONFIG, PINTEREST_QUERIES } from "./config/index";
 import { sleep }                                     from "./utils/helpers";
-import type { PinterestPin, ScraperSource }          from "./types/index";
+import type { PinterestPin, RedditPost ,ScraperSource }          from "./types/index";
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +45,29 @@ function printStats(pins: PinterestPin[]): void {
   }
   console.log(chalk.bold.white("════════════════════════════════════\n"));
 }
+// ── Reddit stats printer ──────────────────────────────────────────────────────
 
+function printRedditStats(posts: RedditPost[]): void {
+  console.log(chalk.bold.white("\n════════════════════════════════════"));
+  console.log(chalk.bold.white("  REDDIT SCRAPE SUMMARY"));
+  console.log(chalk.bold.white("════════════════════════════════════"));
+  console.log(`  Total posts      : ${chalk.green(posts.length)}`);
+  console.log(`  Breakout posts   : ${chalk.green(posts.filter(p => p.is_breakout).length)}`);
+  console.log(`  High velocity    : ${chalk.green(posts.filter(p => p.velocity >= 60).length)}`);
+  console.log(`  Unique subreddits: ${chalk.green(new Set(posts.map(p => p.subreddit)).size)}`);
+
+  const niches = [...new Set(posts.map(p => p.niche))];
+  console.log(`  Niches covered   : ${chalk.cyan(niches.join(", "))}`);
+
+  const top5 = [...posts].sort((a, b) => b.score - a.score).slice(0, 5);
+  if (top5.length) {
+    console.log(chalk.bold.white("\n  Top 5 by score:"));
+    top5.forEach((p, i) =>
+      console.log(chalk.gray(`  ${i + 1}. [${p.score}↑ v:${p.velocity}] r/${p.subreddit} — ${p.title.slice(0, 55)}`))
+    );
+  }
+  console.log(chalk.bold.white("════════════════════════════════════\n"));
+}
 // ── Pinterest orchestrator ────────────────────────────────────────────────────
 
 async function runPinterest(): Promise<PinterestPin[]> {
@@ -93,7 +117,31 @@ async function runPinterest(): Promise<PinterestPin[]> {
 
   return allPins;
 }
+// ── Reddit orchestrator ───────────────────────────────────────────────────────
 
+async function runReddit(): Promise<RedditPost[]> {
+  // In test mode: only Tier A, first 5 subreddits
+  // In full mode: Tier A + B (Tier C is separate deep run)
+  const entries = IS_TEST
+    ? getSubredditsByTier("A").slice(0, 5)
+    : getSubredditsByTier("A").concat(getSubredditsByTier("B"));
+
+  console.log(chalk.bold.cyan(`\n  Mode: ${IS_TEST ? "TEST (5 subreddits)" : `FULL (${entries.length} subreddits, Tier A + B)`}`));
+
+  const { posts, ok, failed } = await scrapeReddit(entries);
+
+  console.log(chalk.bold.white(`\n  Done: ${ok} subreddits ok, ${failed} failed, ${posts.length} posts`));
+
+  if (SAVE_DB && posts.length) {
+    const r = await upsertRedditPosts(posts);
+    console.log(chalk.blue(`  💾 DB: +${r.inserted} new, ${r.updated} updated, ${r.errors} errors`));
+
+    const stats = await getRedditTableStats();
+    console.log(chalk.blue(`  📊 Table: ${stats.total_posts} total, ${stats.active_posts} active, avg velocity ${stats.avg_velocity}`));
+  }
+
+  return posts;
+}
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -157,3 +205,21 @@ main().catch((err: unknown) => {
   console.error(chalk.red(`\n✗ Fatal: ${(err as Error).message}`));
   process.exit(1);
 });
+// Inside main(), after the existing Pinterest block:
+
+if (SOURCE === "reddit") {
+  await connectDB();
+  const conn = await testConnection();
+  console.log(chalk.green(`  ✓ DB: ${conn.db} @ ${conn.time}`));
+
+  const posts = await runReddit();
+  printRedditStats(posts);
+
+  if (!SAVE_DB) {
+    const outFile = `reddit_output_${Date.now()}.json`;
+    writeFileSync(outFile, JSON.stringify(posts, null, 2));
+    console.log(chalk.gray(`  📁 Saved to ${outFile}`));
+  }
+
+  await disconnectDB();
+}

@@ -209,7 +209,8 @@ async function scrapeWithPlaywright(
     console.log(chalk.gray(`  scroll ${scrolls} → ${pins.length} pins so far`));
   }
 
-  await enrichPinsWithSaves(context, pins);
+  const ENRICH_LIMIT = 30; // enrich only top 30 per query
+  await enrichPinsWithSaves(context, pins.slice(0, ENRICH_LIMIT));
 
 } catch (err) {
   console.log(chalk.yellow(`  ⚠ Page load issue: ${(err as Error).message}`));
