@@ -15,16 +15,17 @@
     "reddit:test:save": "tsx index.ts --source reddit --test --save",
     "reddit:deep": "tsx index.ts --source reddit --tier C --save",
     "gt:test": "tsx index.ts --source googleTrends --tier A",
-"gt:test:save": "tsx index.ts --source googleTrends --tier A --save",
-"gt:tier-a": "tsx index.ts --source googleTrends --tier A --save",
-"gt:tier-b": "tsx index.ts --source googleTrends --tier B --save",
-"gt:tier-c": "tsx index.ts --source googleTrends --tier C --save",
-"gt:full": "tsx index.ts --source googleTrends --tier A --save && tsx index.ts --source googleTrends --tier B --save && tsx index.ts --source googleTrends --tier C --save"
+    "gt:test:save": "tsx index.ts --source googleTrends --tier A --save",
+    "gt:tier-a": "tsx index.ts --source googleTrends --tier A --save",
+    "gt:tier-b": "tsx index.ts --source googleTrends --tier B --save",
+    "gt:tier-c": "tsx index.ts --source googleTrends --tier C --save",
+    "gt:full": "tsx index.ts --source googleTrends --tier A --save && tsx index.ts --source googleTrends --tier B --save && tsx index.ts --source googleTrends --tier C --save"
   },
   "dependencies": {
     "axios": "^1.7.2",
     "chalk": "^5.3.0",
     "dotenv": "^16.4.5",
+    "p-limit": "^7.3.0",
     "pg": "^8.12.0",
     "playwright": "^1.60.0",
     "snoowrap": "^1.23.0"

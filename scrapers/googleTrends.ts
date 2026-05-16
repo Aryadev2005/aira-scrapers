@@ -209,7 +209,6 @@ async function fetchTimeline(
       tz:      "-330",   // IST offset
       req:     req,
       token:   token,
-      tz:      "-330",
     });
 
     const res = await client.get(`${TIMELINE_PATH}?${params.toString()}`, {

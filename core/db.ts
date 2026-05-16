@@ -2,7 +2,7 @@
 
 import pg from "pg";
 import chalk from "chalk";
-import { DB_CONFIG } from "../config/index";
+import { DB_CONFIG, SCRAPE_CONFIG } from "../config/index";
 import type { PinterestPin, UpsertResult, DBTableStats, RedditPost, RedditTableStats } from "../types/index";
 
 const { Pool } = pg;

@@ -39,9 +39,7 @@ export interface TikTokConfig extends ScraperConfig {
   delayBetweenTags: number;
 }
 
-export interface GoogleTrendsConfig extends ScraperConfig {
-  maxKeywords:          number;
-  delayBetweenKeywords: number;
+export interface GoogleTrendsConfig {
 }
 
 export const SCRAPE_CONFIG = {
