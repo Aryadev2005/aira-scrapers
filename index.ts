@@ -15,7 +15,13 @@ import { scrapeSearch, scrapeTrending, scrapeBoard } from "./scrapers/pinterest"
 import { REDDIT_SUBREDDITS, getSubredditsByTier, SCRAPE_CONFIG, PINTEREST_QUERIES } from "./config/index";
 import { sleep }                                     from "./utils/helpers";
 import type { PinterestPin, RedditPost ,ScraperSource }          from "./types/index";
-
+import { scrapeTikTokHashtags }  from "./scrapers/tiktok";
+import {
+  upsertTikTokVideos,
+  getTikTokTableStats,
+}                                from "./core/db";
+import { TIKTOK_HASHTAGS }       from "./config/index";
+import type { TikTokVideo }      from "./types/index";
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
 const args      = process.argv.slice(2);
@@ -118,6 +124,49 @@ async function runPinterest(): Promise<PinterestPin[]> {
 
   return allPins;
 }
+// ── TikTok orchestrator ───────────────────────────────────────────────────────
+
+async function runTikTok(): Promise<TikTokVideo[]> {
+  console.log(chalk.bold.magenta(`\n🎵 TikTok Scraper (Creative Center)`));
+  console.log(chalk.gray(`  mode    : ${IS_TEST ? "TEST" : "FULL"}`));
+  console.log(chalk.gray(`  save DB : ${SAVE_DB}`));
+  console.log(chalk.bold.white("────────────────────────────────────"));
+
+  // Import the trending function
+  const { scrapeTikTokTrending } = await import("./scrapers/tiktok");
+  const trending = await scrapeTikTokTrending();
+
+  if (SAVE_DB && trending.length > 0) {
+    const r = await upsertTikTokVideos(trending);
+    console.log(chalk.blue(`  💾 DB: +${r.inserted} new, ${r.updated} updated, ${r.errors} errors`));
+  }
+
+  console.log(chalk.bold.white("\n════════════════════════════════════"));
+  console.log(chalk.bold.white("  TIKTOK SCRAPE SUMMARY"));
+  console.log(chalk.bold.white("════════════════════════════════════"));
+  const uniqueSounds = new Set(trending.filter(v => v.sound_name).map(v => v.sound_name)).size;
+  console.log(`  Total entries : ${chalk.green(trending.length)}`);
+  console.log(`  With views    : ${chalk.green(trending.filter(v => v.views > 0).length)}`);
+  console.log(`  Unique sounds : ${chalk.green(uniqueSounds)}`);
+
+  const top5 = [...trending].sort((a, b) => b.views - a.views).slice(0, 5);
+  if (top5.length) {
+    console.log(chalk.bold.white("\n  Top 5 by views:"));
+    top5.forEach((v, i) =>
+      console.log(chalk.gray(`  ${i + 1}. ${v.description.slice(0, 80)}`))
+    );
+  }
+  console.log(chalk.bold.white("════════════════════════════════════\n"));
+
+  if (SAVE_DB) {
+    try {
+      const stats = await getTikTokTableStats();
+      console.log(chalk.blue(`  📊 DB total: ${stats.total_videos} | active: ${stats.active_videos}`));
+    } catch { /* optional */ }
+  }
+
+  return trending;
+}
 // ── Reddit orchestrator ───────────────────────────────────────────────────────
 
 async function runReddit(): Promise<RedditPost[]> {
@@ -169,6 +218,17 @@ async function main(): Promise<void> {
     }
 
     await disconnectDB();
+    return;
+  }
+
+  if (SOURCE === "tiktok") {
+    if (SAVE_DB) {
+      connectDB();
+      const conn = await testConnection();
+      console.log(chalk.green(`  ✓ DB: ${conn.db} @ ${conn.time}`));
+    }
+    await runTikTok();
+    if (SAVE_DB) await disconnectDB();
     return;
   }
 

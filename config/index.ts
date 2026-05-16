@@ -63,24 +63,24 @@ export const SCRAPE_CONFIG = {
 
   tiktok: {
     maxVideosPerTag:  30,
-    delayBetweenTags: 3000,
+    delayBetweenTags: 5000,   // bump to 5s — TikTok is aggressive
     maxRetries:       3,
     retryDelay:       5000,
   } satisfies TikTokConfig,
 
-  googleTrends: {
-    geo:               "IN",
-    timeRange:         "now 1-d",
-    concurrency:       5,
-    minDelayMs:        1000,
-    maxDelayMs:        3000,
-    maxRetries:        3,
-    retryBaseMs:       5000,
-    batchSize:         5,
-    interestThreshold: 10,
-    breakoutThreshold: 90,
-    expiresInDays:     3,
-  } satisfies GoogleTrendsConfig,
+googleTrends: {
+  geo:               "IN",
+  timeRange:         "now 1-d",
+  concurrency:       5,        // was 5 — must be 1 without proxy
+  minDelayMs:        1000,     // was 1000 — longer delay without proxy
+  maxDelayMs:        3000,     // was 3000
+  maxRetries:        3,        // was 3 — fail faster in test
+  retryBaseMs:       10000,
+  batchSize:         5,        // was 5 — one at a time
+  interestThreshold: 10,
+  breakoutThreshold: 90,
+  expiresInDays:     3,
+},
 };
 
 // ── Global proxy ──────────────────────────────────────────────────────────────
@@ -585,9 +585,36 @@ export function getSubredditsByTier(tier: "A" | "B" | "C"): SubredditEntry[] {
   return REDDIT_SUBREDDITS.filter((s) => s.tier === tier);
 }
 
+// Replace the existing TIKTOK_HASHTAGS array in config/index.ts:
+
 export const TIKTOK_HASHTAGS: string[] = [
-  "cleangirl", "grwm", "quietluxury", "koreanbeauty",
-  "fitcheck", "studywithme", "contentcreator", "startupindia",
+  // ── Indian creator economy (Tier A — highest relevance for AIRA) ──────────
+  "contentcreator",
+  "indianyoutuber",
+  "grwm",
+  "studywithme",
+  "startupindia",
+  "collegelife",
+  "skincareroutine",
+  "fitnessmotivation",
+  "cookinghacks",
+
+  // ── Global viral formats (Tier B — trend discovery) ───────────────────────
+  "cleangirl",
+  "quietluxury",
+  "dayinmylife",
+  "silentwalking",
+  "moneytips",
+  "booktok",
+  "smallbusiness",
+  "morningroutine",
+  "productivity",
+  "fashioninspo",
+
+  // ── Audio / viral sounds (Tier C — sound intelligence) ───────────────────
+  "fyp",
+  "trending",
+  "viralvideo",
 ];
 
 // ADD to your existing config/index.ts

@@ -3,8 +3,8 @@
 import pg from "pg";
 import chalk from "chalk";
 import { DB_CONFIG, SCRAPE_CONFIG } from "../config/index";
-import type { PinterestPin, UpsertResult, DBTableStats, RedditPost, RedditTableStats } from "../types/index";
-
+import type { PinterestPin, UpsertResult, DBTableStats, RedditPost, RedditTableStats} from "../types/index";
+import type { TikTokVideo, TikTokUpsertResult, TikTokTableStats } from "../types/index";
 const { Pool } = pg;
 let pool: pg.Pool | null = null;
 
@@ -270,4 +270,117 @@ export async function getGoogleTrendsTableStats(): Promise<GoogleTrendsTableStat
     FROM discovery_google_trends_raw
   `);
   return res.rows[0] as GoogleTrendsTableStats;
+}
+// ── TikTok upsert ─────────────────────────────────────────────────────────────
+// Add these imports at the top of db.ts if not already present:
+//   import type { TikTokVideo, TikTokUpsertResult, TikTokTableStats } from "../types/index";
+
+export async function upsertTikTokVideos(
+  videos: TikTokVideo[],
+): Promise<TikTokUpsertResult> {
+  if (!pool) throw new Error("DB not connected");
+  if (!videos.length) return { inserted: 0, updated: 0, errors: 0, skipped: 0 };
+
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+  let inserted = 0, updated = 0, errors = 0, skipped = 0;
+
+  for (const v of videos) {
+    if (!v.tiktok_id || v.tiktok_id.trim() === "") { skipped++; continue; }
+
+    try {
+      const engagement = v.views > 0
+        ? (v.likes + v.comments + v.shares + v.saves) / v.views
+        : 0;
+
+      const res = await pool.query(
+        `INSERT INTO discovery_tiktok_raw (
+          tiktok_id,
+          description,
+          creator_handle,
+          creator_name,
+          creator_followers,
+          views,
+          likes,
+          comments,
+          shares,
+          saves,
+          engagement_rate,
+          sound_name,
+          sound_artist,
+          hashtags,
+          video_url,
+          thumbnail_url,
+          duration,
+          expires_at,
+          raw_data
+        ) VALUES (
+          $1,$2,$3,$4,$5::bigint,$6::bigint,$7::bigint,
+          $8::bigint,$9::bigint,$10::bigint,$11::decimal,
+          $12,$13,$14,$15,$16,$17,$18,$19::jsonb
+        )
+        ON CONFLICT (tiktok_id) DO UPDATE SET
+          views           = GREATEST(EXCLUDED.views, discovery_tiktok_raw.views),
+          likes           = GREATEST(EXCLUDED.likes, discovery_tiktok_raw.likes),
+          comments        = GREATEST(EXCLUDED.comments, discovery_tiktok_raw.comments),
+          shares          = GREATEST(EXCLUDED.shares, discovery_tiktok_raw.shares),
+          saves           = GREATEST(EXCLUDED.saves, discovery_tiktok_raw.saves),
+          engagement_rate = EXCLUDED.engagement_rate,
+          sound_name      = EXCLUDED.sound_name,
+          sound_artist    = EXCLUDED.sound_artist,
+          hashtags        = EXCLUDED.hashtags,
+          thumbnail_url   = EXCLUDED.thumbnail_url,
+          scraped_at      = NOW()
+        RETURNING (xmax = 0) AS is_insert`,
+        [
+          v.tiktok_id,
+          v.description.substring(0, 500),
+          v.creator_handle.substring(0, 100),
+          v.creator_name.substring(0, 100),
+          BigInt(Math.max(0, v.creator_followers)),
+          BigInt(Math.max(0, v.views)),
+          BigInt(Math.max(0, v.likes)),
+          BigInt(Math.max(0, v.comments)),
+          BigInt(Math.max(0, v.shares)),
+          BigInt(Math.max(0, v.saves)),
+          Math.min(1, Math.max(0, engagement)),
+          v.sound_name.substring(0, 200),
+          v.sound_artist.substring(0, 100),
+          v.hashtags,
+          v.video_url.substring(0, 500),
+          v.thumbnail_url.substring(0, 500),
+          Math.max(0, v.duration),
+          expiresAt.toISOString(),
+          JSON.stringify({
+            source:         "tiktok_creative_center",
+            source_hashtag: v.source_hashtag,
+            scraped_at:     new Date().toISOString(),
+          }),
+        ],
+      );
+
+      if ((res.rows[0] as { is_insert: boolean })?.is_insert) inserted++;
+      else updated++;
+    } catch (err) {
+      console.error(chalk.red(`  ✗ DB upsert failed tiktok_id ${v.tiktok_id}: ${(err as Error).message}`));
+      errors++;
+    }
+  }
+
+  return { inserted, updated, errors, skipped };
+}
+
+export async function getTikTokTableStats(): Promise<TikTokTableStats> {
+  if (!pool) throw new Error("DB not connected");
+  const res = await pool.query(`
+    SELECT
+      COUNT(*)                                                      AS total_videos,
+      COUNT(*) FILTER (WHERE views > 0)                            AS with_views,
+      COUNT(*) FILTER (WHERE scraped_at > NOW() - INTERVAL '24h') AS scraped_last_24h,
+      COUNT(*) FILTER (WHERE expires_at > NOW())                   AS active_videos,
+      MAX(scraped_at)                                              AS last_scraped,
+      ROUND(AVG(views::numeric), 0)                                AS avg_views
+    FROM discovery_tiktok_raw
+    WHERE raw_data->>'source' = 'tiktok_creative_center'
+  `);
+  return res.rows[0] as TikTokTableStats;
 }

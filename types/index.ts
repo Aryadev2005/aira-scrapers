@@ -159,3 +159,41 @@ export interface GoogleTrendsRunResult {
   skipped:       number;
   durationMs:    number;
 }
+// ── TikTok ────────────────────────────────────────────────────────────────────
+
+export interface TikTokVideo {
+  tiktok_id:         string;
+  description:       string;
+  creator_handle:    string;
+  creator_name:      string;
+  creator_followers: number;
+  views:             number;
+  likes:             number;
+  comments:          number;
+  shares:            number;
+  saves:             number;
+  engagement_rate:   number;
+  sound_name:        string;
+  sound_artist:      string;
+  hashtags:          string[];
+  video_url:         string;
+  thumbnail_url:     string;
+  duration:          number;
+  source_hashtag:    string;
+}
+
+export interface TikTokUpsertResult {
+  inserted: number;
+  updated:  number;
+  errors:   number;
+  skipped:  number;
+}
+
+export interface TikTokTableStats {
+  total_videos:     string;
+  with_views:       string;
+  scraped_last_24h: string;
+  active_videos:    string;
+  last_scraped:     Date;
+  avg_views:        string;
+}

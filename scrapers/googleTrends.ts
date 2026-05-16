@@ -12,7 +12,8 @@
 //   Step 3 — /trends/api/widgetdata/relatedsearches → related queries + topics
 // ══════════════════════════════════════════════════════════════════════════════
 
-import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
+import axios, { type AxiosInstance } from "axios";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import chalk from "chalk";
 import { SCRAPE_CONFIG, PROXY_URL } from "../config/index";
 import type {
@@ -26,7 +27,6 @@ import type {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GT_BASE        = "https://trends.google.com";
-const EXPLORE_PATH   = "/trends/explore";
 const TIMELINE_PATH  = "/trends/api/widgetdata/multiline";
 const RELATED_PATH   = "/trends/api/widgetdata/relatedsearches";
 const CFG            = SCRAPE_CONFIG.googleTrends;
@@ -37,25 +37,6 @@ const XSSI_PREFIX    = ")]}',\n";
 // ── Proxy session rotation ────────────────────────────────────────────────────
 // DataImpulse format: http://user-USERNAME-session-SESSIONID:PASSWORD@gate.dataimpulse.com:823
 // We replace the literal string "SESSION" with a random ID per request.
-
-function buildProxyConfig(sessionId: string): AxiosRequestConfig["proxy"] | undefined {
-  if (!PROXY_URL) return undefined;
-
-  try {
-    const rotated = PROXY_URL.replace("{SESSION}", sessionId).replace("SESSION", sessionId);
-    const url = new URL(rotated);
-    return {
-      host:     url.hostname,
-      port:     parseInt(url.port || "823"),
-      auth:     url.username && url.password
-                  ? { username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) }
-                  : undefined,
-      protocol: url.protocol.replace(":", "") as "http" | "https",
-    };
-  } catch {
-    return undefined;
-  }
-}
 
 function randomSessionId(): string {
   return Math.random().toString(36).slice(2, 12);
@@ -70,13 +51,27 @@ function jitter(minMs: number, maxMs: number): Promise<void> {
 
 // ── Axios instance factory ────────────────────────────────────────────────────
 
+function buildProxyAgent(_sessionId: string): HttpsProxyAgent<string> | null {
+  if (!PROXY_URL) return null;
+  try {
+    // DataImpulse rotates IP per connection automatically — no session suffix needed
+    console.log(`[DEBUG] Proxy agent connecting to DataImpulse gateway`);
+    return new HttpsProxyAgent(PROXY_URL);
+  } catch (err: any) {
+    console.error(`[DEBUG] Proxy agent build failed: ${err.message}`);
+    return null;
+  }
+}
+
 function buildClient(sessionId: string): AxiosInstance {
-  const proxy = buildProxyConfig(sessionId);
+  const agent = buildProxyAgent(sessionId);
 
   return axios.create({
-    baseURL:        GT_BASE,
-    timeout:        20_000,
-    proxy:          proxy || false,  // false = no proxy (direct connection)
+    baseURL:    GT_BASE,
+    timeout:    20_000,
+    proxy:      false,          // MUST be false — disables axios built-in proxy handling
+    httpAgent:  agent ?? undefined,
+    httpsAgent: agent ?? undefined,
     headers: {
       "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-IN,en;q=0.9,hi;q=0.8",
@@ -85,7 +80,6 @@ function buildClient(sessionId: string): AxiosInstance {
       "Referer":         "https://trends.google.com/trends/",
       "Cache-Control":   "no-cache",
     },
-    // Don't throw on 4xx — we handle status codes ourselves
     validateStatus: () => true,
   });
 }
@@ -128,59 +122,52 @@ async function fetchWidgetTokens(
   timeRange: string,
 ): Promise<WidgetToken | null> {
   try {
-    const params = new URLSearchParams({
-      q:         keyword,
-      geo:       geo,
-      date:      timeRange,
-      hl:        "en-IN",
+    const req = JSON.stringify({
+      comparisonItem: [{ keyword, geo, time: timeRange }],
+      category: 0,
+      property: "",
     });
 
-    const res = await client.get(`${EXPLORE_PATH}?${params.toString()}`);
+    const params = new URLSearchParams({
+      hl:  "en-IN",
+      tz:  "-330",
+      req: req,
+    });
+
+    // Hit the JSON API endpoint — NOT the HTML explore page
+    const res = await client.get(
+      `/trends/api/explore?${params.toString()}`,
+    );
+
+    console.log(`[DEBUG] explore API status: ${res.status}, length: ${String(res.data).length}`);
 
     if (res.status === 429) {
+      console.log(`[DEBUG] 429 body:`, String(res.data).slice(0, 200));
       throw new Error("RATE_LIMITED");
     }
     if (res.status !== 200) {
       throw new Error(`HTTP ${res.status}`);
     }
 
-    const html: string = res.data as string;
+    const raw  = stripXSSI(res.data as string);
+    const json = JSON.parse(raw);
 
-    // Extract the CSRF token from the page
-    const csrfMatch = html.match(/"token":"([^"]+)"/);
-    const csrfToken  = csrfMatch?.[1] ?? "APP";
+    const widgets: any[] = json.widgets ?? [];
+    console.log(`[DEBUG] widgets found: ${widgets.length}, ids: ${widgets.map((w:any) => w.id).join(", ")}`);
 
-    // Extract widget data JSON embedded in the page
-    // Google embeds it as: {"widgets":[...]}
-    const widgetMatch = html.match(/\{"widgets":\[(.+?)\]\}/s);
-    if (!widgetMatch) {
-      // Possibly blocked or CAPTCHA page
-      if (html.includes("detected unusual traffic")) {
-        throw new Error("CAPTCHA_BLOCK");
-      }
-      return null;
-    }
-
-    const widgetsJson = JSON.parse(`{"widgets":[${widgetMatch[1]}]}`);
-    const widgets: any[] = widgetsJson.widgets ?? [];
-
-    let timelineToken:  string | null = null;
-    let relatedToken:   string | null = null;
+    let timelineToken: string | null = null;
+    let relatedToken:  string | null = null;
+    const csrfToken = "APP";
 
     for (const w of widgets) {
-      if (w.id === "TIMESERIES" && w.token) {
-        timelineToken = w.token as string;
-      }
-      if (w.id === "RELATED_QUERIES" && w.token) {
-        relatedToken = w.token as string;
-      }
+      if (w.id === "TIMESERIES" && w.token)         timelineToken = w.token;
+      if (w.id === "RELATED_QUERIES" && w.token)    relatedToken  = w.token;
     }
 
     return { timelineToken, relatedToken, csrfToken };
   } catch (err: any) {
-    if (err.message === "RATE_LIMITED" || err.message === "CAPTCHA_BLOCK") {
-      throw err; // propagate to retry logic
-    }
+    if (err.message === "RATE_LIMITED") throw err;
+    console.error(`[DEBUG] explore API error: ${err.message}`);
     return null;
   }
 }
@@ -346,7 +333,7 @@ function computeScores(timeline: TrendDataPoint[]): {
 export async function scrapeKeyword(
   entry: KeywordEntry,
 ): Promise<GoogleTrendResult | null> {
-  const { keyword, niche } = entry;
+  const { keyword, niche: _niche } = entry;
   const geo       = CFG.geo;
   const timeRange = CFG.timeRange;
 
@@ -359,6 +346,7 @@ export async function scrapeKeyword(
     try {
       // Step 1: widget tokens
       const tokens = await fetchWidgetTokens(client, keyword, geo, timeRange);
+      console.log(`[DEBUG] ${keyword} — tokens:`, JSON.stringify(tokens));
 
       if (!tokens) {
         lastError = "no widget tokens";
@@ -373,8 +361,10 @@ export async function scrapeKeyword(
       const timeline = tokens.timelineToken
         ? await fetchTimeline(client, tokens.timelineToken, keyword, geo, timeRange, tokens.csrfToken)
         : [];
+      console.log(`[DEBUG] ${keyword} — timeline length: ${timeline.length}, sample:`, timeline.slice(0, 3));
 
       const { interestScore, peakScore, breakout } = computeScores(timeline);
+      console.log(`[DEBUG] ${keyword} — interestScore: ${interestScore}, peakScore: ${peakScore}, breakout: ${breakout}, threshold: ${CFG.interestThreshold}`);
 
       // Skip keywords with no interest — saves DB writes
       if (interestScore < CFG.interestThreshold && !breakout) {

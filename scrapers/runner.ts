@@ -30,7 +30,8 @@ export async function runGoogleTrendsScrape(
   dryRun = false,
 ): Promise<GoogleTrendsRunResult> {
   const start    = Date.now();
-  const keywords = getKeywordsByTier(tier);
+  const rawKeywords = getKeywordsByTier(tier);
+  const keywords = process.env.GT_LIMIT ? rawKeywords.slice(0, parseInt(process.env.GT_LIMIT)) : rawKeywords;
   const limit    = pLimit(CFG.concurrency);
 
   console.log(chalk.bold.cyan(`\n═══════════════════════════════════════════`));

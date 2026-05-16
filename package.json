@@ -19,12 +19,19 @@
     "gt:tier-a": "tsx index.ts --source googleTrends --tier A --save",
     "gt:tier-b": "tsx index.ts --source googleTrends --tier B --save",
     "gt:tier-c": "tsx index.ts --source googleTrends --tier C --save",
-    "gt:full": "tsx index.ts --source googleTrends --tier A --save && tsx index.ts --source googleTrends --tier B --save && tsx index.ts --source googleTrends --tier C --save"
+    "gt:full": "tsx index.ts --source googleTrends --tier A --save && tsx index.ts --source googleTrends --tier B --save && tsx index.ts --source googleTrends --tier C --save",
+    "tiktok": "tsx index.ts --source tiktok",
+    "tiktok:test": "tsx index.ts --source tiktok --test",
+    "tiktok:save": "tsx index.ts --source tiktok --save",
+    "tiktok:test:save": "tsx index.ts --source tiktok --test --save"
   },
   "dependencies": {
+    "@rediska1114/tiktok-api": "^1.0.7",
+    "async-retry": "^1.3.3",
     "axios": "^1.7.2",
     "chalk": "^5.3.0",
     "dotenv": "^16.4.5",
+    "https-proxy-agent": "^9.0.0",
     "p-limit": "^7.3.0",
     "pg": "^8.12.0",
     "playwright": "^1.60.0",
