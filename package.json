@@ -13,7 +13,13 @@
     "reddit:test": "tsx index.ts --source reddit --test",
     "reddit:save": "tsx index.ts --source reddit --save",
     "reddit:test:save": "tsx index.ts --source reddit --test --save",
-    "reddit:deep": "tsx index.ts --source reddit --tier C --save"
+    "reddit:deep": "tsx index.ts --source reddit --tier C --save",
+    "gt:test": "tsx index.ts --source googleTrends --tier A",
+"gt:test:save": "tsx index.ts --source googleTrends --tier A --save",
+"gt:tier-a": "tsx index.ts --source googleTrends --tier A --save",
+"gt:tier-b": "tsx index.ts --source googleTrends --tier B --save",
+"gt:tier-c": "tsx index.ts --source googleTrends --tier C --save",
+"gt:full": "tsx index.ts --source googleTrends --tier A --save && tsx index.ts --source googleTrends --tier B --save && tsx index.ts --source googleTrends --tier C --save"
   },
   "dependencies": {
     "axios": "^1.7.2",

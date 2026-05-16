@@ -92,3 +92,70 @@ export interface SubredditEntry {
   tier:  "A" | "B" | "C";
   niche: string;
 }
+
+// ADD these to your existing types/index.ts
+
+// ── Google Trends ─────────────────────────────────────────────────────────────
+
+export type TrendTier = "A" | "B" | "C";
+
+export interface KeywordEntry {
+  keyword: string;
+  tier:    TrendTier;
+  niche:   string;
+}
+
+export interface TrendDataPoint {
+  date:  string; // "YYYY-MM-DD"
+  value: number; // 0–100 relative interest
+}
+
+export interface RelatedQuery {
+  query:   string;
+  value:   number;   // 0–100 or "Breakout"
+  isRisingBreakout: boolean;
+}
+
+export interface RelatedTopic {
+  topic:   string;
+  value:   number;
+  isRisingBreakout: boolean;
+}
+
+export interface GoogleTrendResult {
+  keyword:         string;
+  geo:             string;
+  interestScore:   number;   // latest value (0–100)
+  peakScore:       number;   // max over time range
+  breakout:        boolean;
+  relatedQueries:  RelatedQuery[];
+  relatedTopics:   RelatedTopic[];
+  timelineData:    TrendDataPoint[];
+  trendDate:       string;   // "YYYY-MM-DD"
+}
+
+export interface GoogleTrendsUpsertResult {
+  inserted: number;
+  updated:  number;
+  errors:   number;
+  skipped:  number;
+}
+
+export interface GoogleTrendsTableStats {
+  total_keywords:    string;
+  breakout_count:    string;
+  scraped_last_24h:  string;
+  active_keywords:   string;
+  last_scraped:      Date;
+  avg_interest:      string;
+}
+
+export interface GoogleTrendsRunResult {
+  tier:          TrendTier;
+  totalKeywords: number;
+  inserted:      number;
+  updated:       number;
+  errors:        number;
+  skipped:       number;
+  durationMs:    number;
+}

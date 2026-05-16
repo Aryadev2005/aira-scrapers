@@ -71,10 +71,17 @@ export const SCRAPE_CONFIG = {
   } satisfies TikTokConfig,
 
   googleTrends: {
-    maxKeywords:          20,
-    delayBetweenKeywords: 2000,
-    maxRetries:           3,
-    retryDelay:           4000,
+    geo:               "IN",
+    timeRange:         "now 1-d",
+    concurrency:       5,
+    minDelayMs:        1000,
+    maxDelayMs:        3000,
+    maxRetries:        3,
+    retryBaseMs:       5000,
+    batchSize:         5,
+    interestThreshold: 10,
+    breakoutThreshold: 90,
+    expiresInDays:     3,
   } satisfies GoogleTrendsConfig,
 };
 
@@ -585,8 +592,46 @@ export const TIKTOK_HASHTAGS: string[] = [
   "fitcheck", "studywithme", "contentcreator", "startupindia",
 ];
 
-export const GOOGLE_TRENDS_KEYWORDS: string[] = [
-  "indian fashion trends", "bollywood makeup",
-  "content creator india", "instagram reels ideas",
-  "youtube shorts ideas india",
-];
+// ADD to your existing config/index.ts
+
+// ── Google Trends config ──────────────────────────────────────────────────────
+
+export interface GoogleTrendsConfig {
+  geo:                  string;
+  timeRange:            string;
+  concurrency:          number;
+  minDelayMs:           number;
+  maxDelayMs:           number;
+  maxRetries:           number;
+  retryBaseMs:          number;
+  batchSize:            number;
+  interestThreshold:    number;
+  breakoutThreshold:    number;
+  expiresInDays:        number;
+}
+
+// ADD to SCRAPE_CONFIG object:
+// googleTrends: { ... } satisfies GoogleTrendsConfig
+
+// Add this block inside your existing SCRAPE_CONFIG export:
+/*
+  googleTrends: {
+    geo:               "IN",
+    timeRange:         "now 1-d",
+    concurrency:       5,
+    minDelayMs:        1000,
+    maxDelayMs:        3000,
+    maxRetries:        3,
+    retryBaseMs:       5000,
+    batchSize:         5,
+    interestThreshold: 10,
+    breakoutThreshold: 90,
+    expiresInDays:     3,
+  } satisfies GoogleTrendsConfig,
+*/
+
+// ── Google Trends proxy config ────────────────────────────────────────────────
+// PROXY_URL already exists in your config. Google Trends scraper will use it.
+// When DataImpulse is ready, set:
+//   SCRAPER_PROXY=http://user-USERNAME-session-{SESSION}:PASSWORD@gate.dataimpulse.com:823
+// The {SESSION} placeholder is replaced per-request in proxy.ts

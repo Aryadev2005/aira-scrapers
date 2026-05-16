@@ -6,7 +6,8 @@ import chalk from "chalk";
 import {
   connectDB, testConnection, disconnectDB,
   upsertPinterestPins, getPinterestTableStats,
-  upsertRedditPosts, getRedditTableStats,        
+  upsertRedditPosts, getRedditTableStats,
+  getGoogleTrendsTableStats,        
 } from "./core/db";
 import { PinterestSession }                          from "./core/session";
 import { scrapeReddit }          from "./scrapers/reddit"; 
@@ -208,7 +209,39 @@ async function main(): Promise<void> {
     } catch { /* non-fatal */ }
     await disconnectDB();
   }
+// ADD to index.ts — in your SOURCE routing section
 
+// ── Google Trends source ──────────────────────────────────────────────────────
+if (SOURCE === "googleTrends") {
+  const { runGoogleTrendsScrape } = await import("./scrapers/runner");
+
+  // CLI: tsx index.ts --source googleTrends --tier A --test --save
+  const TIER_IDX = args.indexOf("--tier");
+  const TIER_ARG = TIER_IDX !== -1 ? args[TIER_IDX + 1] : null;
+  const tier = (["A", "B", "C"].includes(TIER_ARG ?? "") ? TIER_ARG : "A") as "A" | "B" | "C";
+
+  if (SAVE_DB) {
+    connectDB();
+    await testConnection();
+  }
+
+  const result = await runGoogleTrendsScrape(tier, !SAVE_DB);
+
+  if (SAVE_DB) {
+    console.log(chalk.bold.green("\n✓ Results saved to Supabase DB"));
+    const stats = await getGoogleTrendsTableStats();
+    console.log(chalk.bold.white("\n  DB TABLE STATS:"));
+    console.log(`  Total keywords  : ${chalk.cyan(stats.total_keywords)}`);
+    console.log(`  Breakouts       : ${chalk.yellow(stats.breakout_count)}`);
+    console.log(`  Active          : ${chalk.green(stats.active_keywords)}`);
+    console.log(`  Scraped 24h     : ${chalk.green(stats.scraped_last_24h)}`);
+    console.log(`  Avg interest    : ${chalk.cyan(stats.avg_interest)}`);
+    console.log(`  Last scraped    : ${chalk.gray(stats.last_scraped)}`);
+    await disconnectDB();
+  }
+
+  process.exit(0);
+}
   const out = `pins_${Date.now()}.json`;
   writeFileSync(out, JSON.stringify({
     scraped_at: new Date().toISOString(),
