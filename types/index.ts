@@ -151,8 +151,8 @@ export interface GoogleTrendsTableStats {
 }
 
 export interface GoogleTrendsRunResult {
-  tier:          TrendTier;
-  totalKeywords: number;
+  tier:          TrendTier | string;
+  totalKeywords?: number;
   inserted:      number;
   updated:       number;
   errors:        number;
