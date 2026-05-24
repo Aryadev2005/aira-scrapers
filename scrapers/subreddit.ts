@@ -118,6 +118,78 @@ export const SUBREDDIT_LIST: SubredditEntry[] = [
   { name: "interestingasfuck",   tier: "A", niche: "general" },
   { name: "nextfuckinglevel",    tier: "A", niche: "general" },
 
+  // ── TIER A — Global creator niches (every 12h) ───────────────────────────
+
+  // Beauty & hair (global)
+  { name: "Hair",                tier: "A", niche: "beauty" },
+  { name: "NailArt",             tier: "A", niche: "beauty" },
+
+  // Fashion (global)
+  { name: "malefashionadvice",   tier: "A", niche: "fashion" },
+  { name: "streetwear",          tier: "A", niche: "fashion" },
+
+  // Fitness & nutrition (global)
+  { name: "running",             tier: "A", niche: "fitness" },
+  { name: "nutrition",           tier: "A", niche: "fitness" },
+
+  // Finance (global)
+  { name: "personalfinance",     tier: "A", niche: "finance" },
+  { name: "wallstreetbets",      tier: "A", niche: "finance" },
+  { name: "Entrepreneur",        tier: "A", niche: "finance" },
+  { name: "financialindependence",tier: "A",niche: "finance" },
+  { name: "investing",           tier: "A", niche: "finance" },
+
+  // Gaming (global)
+  { name: "leagueoflegends",     tier: "A", niche: "gaming" },
+  { name: "Twitch",              tier: "A", niche: "gaming" },
+
+  // Music (global)
+  { name: "hiphopheads",         tier: "A", niche: "music" },
+  { name: "Music",               tier: "A", niche: "music" },
+
+  // Entertainment & pop culture (global)
+  { name: "movies",              tier: "A", niche: "entertainment" },
+  { name: "television",          tier: "A", niche: "entertainment" },
+  { name: "popculturechat",      tier: "A", niche: "entertainment" },
+  { name: "anime",               tier: "A", niche: "entertainment" },
+
+  // Wellness & self-improvement (global)
+  { name: "GetMotivated",        tier: "A", niche: "wellness" },
+  { name: "mentalhealth",        tier: "A", niche: "wellness" },
+  { name: "minimalism",          tier: "A", niche: "wellness" },
+
+  // Sports (global)
+  { name: "nba",                 tier: "A", niche: "sports" },
+  { name: "formula1",            tier: "A", niche: "sports" },
+  { name: "tennis",              tier: "A", niche: "sports" },
+
+  // Creator & social media tools (global)
+  { name: "TikTok",              tier: "A", niche: "creator" },
+  { name: "InstagramMarketing",  tier: "A", niche: "creator" },
+
+  // Lifestyle & home (global)
+  { name: "HomeImprovement",     tier: "A", niche: "lifestyle" },
+  { name: "DIY",                 tier: "A", niche: "lifestyle" },
+  { name: "vandwellers",         tier: "A", niche: "lifestyle" },
+
+  // Travel (global)
+  { name: "travel",              tier: "A", niche: "travel" },
+  { name: "solotravel",          tier: "A", niche: "travel" },
+
+  // Food (global)
+  { name: "Cooking",             tier: "A", niche: "food" },
+  { name: "recipes",             tier: "A", niche: "food" },
+  { name: "Baking",              tier: "A", niche: "food" },
+  { name: "Coffee",              tier: "A", niche: "food" },
+  { name: "MealPrepSunday",      tier: "A", niche: "food" },
+
+  // Education & language (global)
+  { name: "languagelearning",    tier: "A", niche: "education" },
+
+  // General global signals
+  { name: "worldnews",           tier: "A", niche: "general" },
+  { name: "science",             tier: "A", niche: "education" },
+
   // ── TIER B — Standard frequency (every 24h) ──────────────────────────────
 
   // Regional India
